@@ -30,16 +30,21 @@ def get_map():
         wspolrzedne: współrzędne GPS lub adres
         szerokosc: szerokość obrazu (opcjonalne)
         wysokosc: wysokość obrazu (opcjonalne)
+        demo: tryb demonstracyjny (opcjonalne)
         
     Zwraca:
         JSON z obrazem mapy w base64
     """
     try:
+        from PIL import Image
+        import os
+        
         data = request.get_json()
         
         wspolrzedne = data.get('wspolrzedne', '')
         szerokosc = data.get('szerokosc', 800)
         wysokosc = data.get('wysokosc', 600)
+        demo_mode = data.get('demo', False)
         
         if not wspolrzedne:
             return jsonify({
@@ -47,18 +52,37 @@ def get_map():
                 'error': 'Brak współrzędnych'
             }), 400
         
-        # Pobierz mapę z Geoportalu
-        mapa, lon, lat = pobierz_mape_dla_wspolrzednych(
-            wspolrzedne,
-            szerokosc,
-            wysokosc
-        )
-        
-        if mapa is None:
-            return jsonify({
-                'success': False,
-                'error': 'Nie udało się pobrać mapy. Sprawdź współrzędne.'
-            }), 400
+        # Tryb demonstracyjny - użyj przykładowego obrazu
+        if demo_mode or wspolrzedne.lower() in ['demo', 'test']:
+            demo_image_path = os.path.join('static', 'images', 'demo_map.png')
+            if os.path.exists(demo_image_path):
+                mapa = Image.open(demo_image_path)
+                lon, lat = 21.0122, 52.2297  # Warszawa
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Brak pliku demonstracyjnego'
+                }), 400
+        else:
+            # Pobierz mapę z Geoportalu
+            mapa, lon, lat = pobierz_mape_dla_wspolrzednych(
+                wspolrzedne,
+                szerokosc,
+                wysokosc
+            )
+            
+            # Jeśli nie udało się pobrać z Geoportalu, użyj trybu demo
+            if mapa is None:
+                demo_image_path = os.path.join('static', 'images', 'demo_map.png')
+                if os.path.exists(demo_image_path):
+                    mapa = Image.open(demo_image_path)
+                    lon, lat = 21.0122, 52.2297
+                    app.logger.warning('Geoportal niedostępny - użyto mapy demonstracyjnej')
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Nie udało się pobrać mapy. Sprawdź współrzędne lub połączenie z Geoportalem.'
+                    }), 400
         
         # Konwertuj obraz do base64
         buffer = BytesIO()
@@ -76,6 +100,7 @@ def get_map():
         })
         
     except Exception as e:
+        app.logger.error(f'Błąd w get_map: {str(e)}')
         return jsonify({
             'success': False,
             'error': f'Błąd serwera: {str(e)}'
@@ -172,12 +197,15 @@ def health():
 
 
 if __name__ == '__main__':
+    import os
+    port = int(os.environ.get('PORT', 5000))
+    
     print("=" * 60)
     print("RoofGeoportal - Aplikacja do pomiaru dachów")
     print("=" * 60)
     print("Uruchamianie serwera...")
-    print("Otwórz przeglądarkę: http://localhost:5000")
+    print(f"Otwórz przeglądarkę: http://localhost:{port}")
     print("Naciśnij Ctrl+C aby zatrzymać serwer")
     print("=" * 60)
     
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=port)

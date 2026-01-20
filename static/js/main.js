@@ -77,6 +77,15 @@ function init() {
     elements.wybierzABtn.addEventListener('click', () => ustawTrybWyboru('punkt_a'));
     elements.wybierzBBtn.addEventListener('click', () => ustawTrybWyboru('punkt_b'));
     elements.obliczBtn.addEventListener('click', wykonajObliczenia);
+    
+    // Dodaj przycisk DEMO
+    const demoBtn = document.getElementById('demo-btn');
+    if (demoBtn) {
+        demoBtn.addEventListener('click', () => {
+            elements.wspolrzedneInput.value = 'demo';
+            zaladujMape();
+        });
+    }
 
     // Obsługa Enter w polu współrzędnych
     elements.wspolrzedneInput.addEventListener('keypress', (e) => {
