@@ -12,6 +12,8 @@ from pyproj import Transformer
 
 # URL serwisu WMTS Geoportalu
 GEOPORTAL_WMTS_URL = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMTS/StandardResolution"
+# Alternatywny URL WMS jako fallback
+GEOPORTAL_WMS_URL = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution"
 
 
 def wgs84_do_epsg2180(lon, lat):
@@ -58,7 +60,7 @@ def pobierz_kafelek_wmts(tile_col, tile_row, zoom_level=14):
     Returns:
         PIL.Image lub None jeśli błąd
     """
-    # Parametry WMTS
+    # Parametry WMTS zgodne z GetCapabilities Geoportalu
     params = {
         'SERVICE': 'WMTS',
         'REQUEST': 'GetTile',
@@ -68,22 +70,42 @@ def pobierz_kafelek_wmts(tile_col, tile_row, zoom_level=14):
         'FORMAT': 'image/jpeg',
         'TILEMATRIXSET': 'EPSG:2180',
         'TILEMATRIX': f'EPSG:2180:{zoom_level}',
-        'TILEROW': tile_row,
-        'TILECOL': tile_col
+        'TILEROW': str(tile_row),
+        'TILECOL': str(tile_col)
     }
     
     try:
         response = requests.get(GEOPORTAL_WMTS_URL, params=params, timeout=10)
         
         if response.status_code == 200:
+            # Sprawdź czy odpowiedź to obraz czy XML (błąd)
+            content_type = response.headers.get('Content-Type', '')
+            
+            # Jeśli odpowiedź to XML, to prawdopodobnie błąd WMTS
+            if 'xml' in content_type.lower() or response.content[:5] == b'<?xml':
+                print(f"Błąd WMTS: otrzymano XML zamiast obrazu")
+                if len(response.content) < 1000:
+                    print(f"Odpowiedź: {response.content[:500].decode('utf-8', errors='ignore')}")
+                return None
+            
+            # Sprawdź czy to rzeczywiście obraz
+            if not (content_type.startswith('image/') or response.content[:2] == b'\xff\xd8'):
+                print(f"Błąd: nieprawidłowy format odpowiedzi (Content-Type: {content_type})")
+                print(f"Pierwsze bajty: {response.content[:20]}")
+                return None
+            
             img = Image.open(BytesIO(response.content))
             return img
         else:
-            print(f"Błąd pobierania kafelka: {response.status_code}")
+            print(f"Błąd pobierania kafelka: HTTP {response.status_code}")
+            if response.content:
+                print(f"Treść błędu: {response.content[:200].decode('utf-8', errors='ignore')}")
             return None
             
     except Exception as e:
         print(f"Błąd podczas pobierania kafelka: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -99,13 +121,14 @@ def wspolrzedne_do_kafelka(x, y, zoom_level=14):
     Returns:
         tuple: (tile_col, tile_row, pixel_x, pixel_y)
     """
-    # Parametry macierzy kafelków dla EPSG:2180
-    # Uproszczone - w rzeczywistości należy pobrać z GetCapabilities
+    # Parametry macierzy kafelków dla EPSG:2180 z GetCapabilities Geoportalu
+    # Wartości zgodne z https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMTS/StandardResolution
     origin_x = -5713134.0
     origin_y = 8693134.0
     tile_size = 256
     
     # Rozdzielczość dla różnych poziomów zoom (metry na piksel)
+    # Źródło: GetCapabilities WMTS Geoportalu
     resolutions = {
         10: 1587.50317,
         11: 793.75158,
@@ -128,7 +151,74 @@ def wspolrzedne_do_kafelka(x, y, zoom_level=14):
     pixel_x = int(((x - origin_x) / resolution) % tile_size)
     pixel_y = int(((origin_y - y) / resolution) % tile_size)
     
+    # Debug info
+    print(f"DEBUG: x={x:.2f}, y={y:.2f}, zoom={zoom_level}")
+    print(f"DEBUG: tile_col={tile_col}, tile_row={tile_row}, px=({pixel_x},{pixel_y})")
+    
     return tile_col, tile_row, pixel_x, pixel_y
+
+
+def pobierz_mape_wms(lon, lat, szerokosc_pikseli=800, wysokosc_pikseli=600):
+    """
+    Pobiera mapę używając WMS jako alternatywa dla WMTS
+    
+    Args:
+        lon: Długość geograficzna (WGS84)
+        lat: Szerokość geograficzna (WGS84)
+        szerokosc_pikseli: Szerokość obrazu
+        wysokosc_pikseli: Wysokość obrazu
+        
+    Returns:
+        PIL.Image lub None
+    """
+    try:
+        # Konwersja do EPSG:2180
+        x, y = wgs84_do_epsg2180(lon, lat)
+        
+        # Oblicz bbox wokół punktu (np. 400m x 300m)
+        width_m = 400
+        height_m = 300
+        
+        bbox = f"{x-width_m/2},{y-height_m/2},{x+width_m/2},{y+height_m/2}"
+        
+        params = {
+            'SERVICE': 'WMS',
+            'REQUEST': 'GetMap',
+            'VERSION': '1.3.0',
+            'LAYERS': 'Raster',
+            'STYLES': '',
+            'CRS': 'EPSG:2180',
+            'BBOX': bbox,
+            'WIDTH': szerokosc_pikseli,
+            'HEIGHT': wysokosc_pikseli,
+            'FORMAT': 'image/jpeg'
+        }
+        
+        print(f"Próba WMS: bbox={bbox}")
+        response = requests.get(GEOPORTAL_WMS_URL, params=params, timeout=10)
+        
+        if response.status_code == 200:
+            content_type = response.headers.get('Content-Type', '')
+            
+            # Sprawdź czy to obraz
+            if 'xml' in content_type.lower() or response.content[:5] == b'<?xml':
+                print(f"WMS: otrzymano XML zamiast obrazu")
+                return None
+            
+            if not (content_type.startswith('image/') or response.content[:2] == b'\xff\xd8'):
+                print(f"WMS: nieprawidłowy format (Content-Type: {content_type})")
+                return None
+            
+            img = Image.open(BytesIO(response.content))
+            print(f"WMS: sukces! Rozmiar: {img.size}")
+            return img
+        else:
+            print(f"WMS: błąd HTTP {response.status_code}")
+            return None
+            
+    except Exception as e:
+        print(f"WMS: błąd {e}")
+        return None
 
 
 def pobierz_mape_dla_obszaru(lon, lat, szerokosc_pikseli=800, wysokosc_pikseli=600, zoom_level=14):
@@ -145,6 +235,17 @@ def pobierz_mape_dla_obszaru(lon, lat, szerokosc_pikseli=800, wysokosc_pikseli=6
     Returns:
         PIL.Image lub None
     """
+    # Najpierw spróbuj WMS (prostsze i bardziej niezawodne)
+    print(f"Próba pobrania mapy przez WMS dla lon={lon}, lat={lat}")
+    mapa_wms = pobierz_mape_wms(lon, lat, szerokosc_pikseli, wysokosc_pikseli)
+    
+    if mapa_wms is not None:
+        print("WMS: sukces!")
+        return mapa_wms
+    
+    # Fallback na WMTS
+    print("WMS nieudane, próba WMTS...")
+    
     # Konwersja do EPSG:2180
     x, y = wgs84_do_epsg2180(lon, lat)
     
@@ -156,6 +257,7 @@ def pobierz_mape_dla_obszaru(lon, lat, szerokosc_pikseli=800, wysokosc_pikseli=6
     kafelek = pobierz_kafelek_wmts(tile_col, tile_row, zoom_level)
     
     if kafelek is None:
+        print("WMTS również nieudane")
         return None
     
     # Wytnij i przeskaluj do żądanego rozmiaru
