@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoofGeoportal - Pomiar Dachów</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏠 RoofGeoportal</h1>
+            <p class="subtitle">Automatyczny pomiar dachów z ortofotomap Geoportalu</p>
+        </header>
+
+        <main>
+            <!-- Sekcja wyszukiwania -->
+            <section class="search-section">
+                <h2>1. Załaduj mapę</h2>
+                <div class="input-group">
+                    <input 
+                        type="text" 
+                        id="wspolrzedne-input" 
+                        placeholder="Wprowadź współrzędne GPS (np. 52.2297 21.0122) lub adres"
+                        value="52.2297 21.0122"
+                    >
+                    <button id="zaladuj-mape-btn" class="btn btn-primary">Załaduj mapę</button>
+                </div>
+                <p class="hint">Przykład: 52.2297 21.0122 (Warszawa, Plac Zamkowy)</p>
+            </section>
+
+            <!-- Interaktywna mapa -->
+            <section class="map-section">
+                <h2>2. Zaznacz dach</h2>
+                <div class="canvas-container">
+                    <canvas id="mapa-canvas" width="800" height="600"></canvas>
+                    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+                        <div class="spinner"></div>
+                        <p>Ładowanie mapy...</p>
+                    </div>
+                </div>
+                <div class="map-controls">
+                    <button id="resetuj-punkty-btn" class="btn btn-secondary">Resetuj punkty</button>
+                    <span class="info">Kliknij na mapie aby zaznaczyć narożniki dachu</span>
+                </div>
+            </section>
+
+            <!-- Panel definicji skali -->
+            <section class="scale-section">
+                <h2>3. Zdefiniuj skalę i parametry</h2>
+                <div class="scale-inputs">
+                    <div class="input-row">
+                        <label>
+                            <span class="label-text">Punkt A:</span>
+                            <span id="punkt-a-display" class="coord-display">Nie zaznaczono</span>
+                            <button id="wybierz-a-btn" class="btn btn-small">Wybierz na mapie</button>
+                        </label>
+                    </div>
+                    <div class="input-row">
+                        <label>
+                            <span class="label-text">Punkt B:</span>
+                            <span id="punkt-b-display" class="coord-display">Nie zaznaczono</span>
+                            <button id="wybierz-b-btn" class="btn btn-small">Wybierz na mapie</button>
+                        </label>
+                    </div>
+                    <div class="input-row">
+                        <label>
+                            <span class="label-text">Rzeczywista długość A-B (m):</span>
+                            <input 
+                                type="number" 
+                                id="rzeczywista-dlugosc-input" 
+                                placeholder="np. 15.5"
+                                step="0.1"
+                                min="0.1"
+                            >
+                        </label>
+                    </div>
+                    <div class="input-row">
+                        <label>
+                            <span class="label-text">Kąt nachylenia dachu (°):</span>
+                            <input 
+                                type="number" 
+                                id="kat-nachylenia-input" 
+                                placeholder="np. 30"
+                                step="1"
+                                min="0"
+                                max="90"
+                                value="30"
+                            >
+                        </label>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Przycisk oblicz -->
+            <section class="calculate-section">
+                <button id="oblicz-btn" class="btn btn-large btn-success">Oblicz parametry dachu</button>
+            </section>
+
+            <!-- Panel wyników -->
+            <section class="results-section" id="results-section" style="display: none;">
+                <h2>Wyniki pomiarów</h2>
+                
+                <div class="results-grid">
+                    <!-- Powierzchnie -->
+                    <div class="result-card">
+                        <h3>Powierzchnie</h3>
+                        <table class="results-table">
+                            <tr>
+                                <td>Powierzchnia rzutu:</td>
+                                <td id="pole-rzutu">-</td>
+                            </tr>
+                            <tr>
+                                <td>Powierzchnia rzeczywista:</td>
+                                <td id="pole-rzeczywiste">-</td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <!-- Parametry -->
+                    <div class="result-card">
+                        <h3>Parametry</h3>
+                        <table class="results-table">
+                            <tr>
+                                <td>Kąt nachylenia:</td>
+                                <td id="param-kat">-</td>
+                            </tr>
+                            <tr>
+                                <td>Skala:</td>
+                                <td id="param-skala">-</td>
+                            </tr>
+                            <tr>
+                                <td>Liczba punktów:</td>
+                                <td id="param-punkty">-</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Wymiary elementów -->
+                <div class="dimensions-container">
+                    <div class="dimension-section">
+                        <h3 class="dimension-title kalenica-color">📏 Kalenice</h3>
+                        <div id="kalenice-lista" class="dimension-list">Brak</div>
+                    </div>
+
+                    <div class="dimension-section">
+                        <h3 class="dimension-title okap-color">📏 Okapy</h3>
+                        <div id="okapy-lista" class="dimension-list">Brak</div>
+                    </div>
+
+                    <div class="dimension-section">
+                        <h3 class="dimension-title skos-color">📏 Skosy</h3>
+                        <div id="skosy-lista" class="dimension-list">Brak</div>
+                    </div>
+
+                    <div class="dimension-section">
+                        <h3 class="dimension-title kosz-color">📏 Kosze</h3>
+                        <div id="kosze-lista" class="dimension-list">Brak</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>RoofGeoportal &copy; 2024 | Dane z Geoportal.gov.pl</p>
+        </footer>
+    </div>
+
+    <!-- Komunikaty -->
+    <div id="message-container"></div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
