@@ -36,6 +36,7 @@ Aplikacja została stworzona z myślą o dekarżach, architektach, rzeczoznawcac
 - ✅ Konwersja współrzędnych WGS84 ↔ EPSG:2180
 - ✅ Pobieranie i łączenie kafelków mapy
 - ✅ API REST do komunikacji z frontendem
+- ✅ Tryb DEMO z przykładową mapą testową
 
 ### Obliczenia geometryczne
 - ✅ Kalkulacja skali na podstawie odcinka referencyjnego
@@ -119,13 +120,18 @@ Przejdź do adresu: **http://localhost:5000**
 1. W polu "Wprowadź współrzędne GPS" wpisz współrzędne w formacie:
    - `szerokość długość` (np. `52.2297 21.0122`)
    - Separator: spacja lub przecinek
+   - Lub wpisz **"demo"** aby załadować mapę testową
 
-2. Kliknij **"Załaduj mapę"**
+2. Kliknij **"Załaduj mapę"** lub **"Tryb DEMO"**
 
 **Przykładowe współrzędne:**
 - Warszawa, Plac Zamkowy: `52.2297 21.0122`
 - Kraków, Rynek Główny: `50.0619 19.9369`
 - Gdańsk, Długi Targ: `54.3487 18.6532`
+
+**Tryb DEMO:**
+- Jeśli Geoportal nie jest dostępny lub chcesz przetestować aplikację, użyj przycisku **"Tryb DEMO"**
+- Zostanie załadowana przykładowa mapa z testowym budynkiem do pomiarów
 
 ### Krok 2: Zdefiniuj skalę
 
@@ -199,6 +205,20 @@ RoofGeoportal/
     ├── calculations.py        # Obliczenia geometryczne
     └── geometry.py            # Funkcje geometrii
 ```
+
+## 📸 Screenshots
+
+### Interfejs główny
+![Interfejs główny RoofGeoportal](https://github.com/user-attachments/assets/acf97e4c-bd0a-4525-a7a1-90e73d86c813)
+
+### Mapa testowa w trybie DEMO
+![Tryb DEMO z załadowaną mapą](https://github.com/user-attachments/assets/beb79d7e-0738-44c9-aab6-274cadeb7f36)
+
+### Zaznaczone punkty referencyjne i narożniki dachu
+![Zaznaczone punkty na mapie](https://github.com/user-attachments/assets/d0a3bcba-de90-4ff6-a22a-e011d804ac3c)
+
+### Wyniki pomiarów
+![Wyniki obliczeń z wizualizacją](https://github.com/user-attachments/assets/a0e45d57-d5ca-44f4-b163-b5af6f14d1e3)
 
 ## 🛠 Technologie
 
