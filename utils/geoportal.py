@@ -62,6 +62,7 @@ def geokoduj_adres(adres):
         adres_lower = adres.lower()
         adres_tokens = set(re.findall(r"[\w]+", adres_lower))
         digits = re.findall(r"\d+", adres)
+        digits_set = set(digits)
         house_match_score = 5.0
         digit_match_score = 2.0
         road_match_score = 2.0
@@ -75,18 +76,21 @@ def geokoduj_adres(adres):
             address = kandydat.get("address") or {}
             house_number = str(address.get("house_number", ""))
             house_digits = re.findall(r"\d+", house_number)
+            house_digits_set = set(house_digits)
             display_name = str(kandydat.get("display_name", ""))
             place_type = str(kandydat.get("type", ""))
             place_class = str(kandydat.get("class", ""))
 
-            if house_digits and digits and any(digit == house_digit for digit in digits for house_digit in house_digits):
+            if house_digits_set and digits_set and house_digits_set & digits_set:
                 score += house_match_score
-            elif digits and any(digit == display_digit for digit in digits for display_digit in re.findall(r"\d+", display_name)):
-                score += digit_match_score
+            elif digits_set:
+                display_digits_set = set(re.findall(r"\d+", display_name))
+                if display_digits_set & digits_set:
+                    score += digit_match_score
 
             if address.get("road"):
                 road_tokens = set(re.findall(r"[\w]+", address["road"].lower()))
-                if road_tokens and road_tokens.issubset(adres_tokens):
+                if road_tokens and len(road_tokens & adres_tokens) / len(road_tokens) >= 0.5:
                     score += road_match_score
 
             for field in ("city", "town", "village", "municipality", "county"):
