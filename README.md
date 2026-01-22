@@ -126,6 +126,7 @@ Przejdź do adresu: **http://localhost:5000**
 
 3. Jeśli wybierasz Google Maps, opcjonalnie podaj **klucz API**.
 4. Kliknij **"Załaduj mapę"** lub **"Tryb DEMO"**
+5. Jeśli Geoportal nie działa, możesz **wgrać zrzut ekranu planu dachu (PNG/JPG)** i użyć go jako tła do pomiarów.
 
 **Przykładowe współrzędne:**
 - Warszawa, Plac Zamkowy: `52.2297 21.0122`
