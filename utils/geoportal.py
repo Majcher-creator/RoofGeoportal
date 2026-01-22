@@ -5,7 +5,7 @@ Pobieranie ortofotomap z polskiego Geoportalu
 
 import requests
 from io import BytesIO
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 import math
 from pyproj import Transformer
 
@@ -63,7 +63,7 @@ def geokoduj_adres(adres):
             "format": "json",
             "limit": 1
         }
-        headers = {"User-Agent": "RoofGeoportal/1.0"}
+        headers = {"User-Agent": "RoofGeoportal/1.0 (contact: support@roofgeoportal.local)"}
         response = requests.get(NOMINATIM_URL, params=params, headers=headers, timeout=10)
         if response.status_code != 200:
             return None
@@ -73,7 +73,7 @@ def geokoduj_adres(adres):
         lat = float(dane[0]["lat"])
         lon = float(dane[0]["lon"])
         return lon, lat
-    except Exception:
+    except (requests.RequestException, ValueError, KeyError, IndexError, TypeError):
         return None
 
 
@@ -379,7 +379,7 @@ def pobierz_mape_openstreetmap(lon, lat, szerokosc_pikseli=800, wysokosc_pikseli
         if not content_type.startswith("image/"):
             return None
         return Image.open(BytesIO(response.content))
-    except Exception:
+    except (requests.RequestException, UnidentifiedImageError, OSError):
         return None
 
 
@@ -404,7 +404,7 @@ def pobierz_mape_google(lon, lat, szerokosc_pikseli=800, wysokosc_pikseli=600, z
         if not content_type.startswith("image/"):
             return None
         return Image.open(BytesIO(response.content))
-    except Exception:
+    except (requests.RequestException, UnidentifiedImageError, OSError):
         return None
 
 
@@ -437,7 +437,7 @@ def pobierz_mape_dla_wspolrzednych(
         else:
             lon = None
             lat = None
-    except Exception:
+    except (ValueError, TypeError):
         lon = None
         lat = None
 
