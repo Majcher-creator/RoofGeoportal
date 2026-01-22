@@ -122,28 +122,39 @@ def wspolrzedne_do_kafelka(x, y, zoom_level=14):
         tuple: (tile_col, tile_row, pixel_x, pixel_y)
     """
     # Parametry macierzy kafelków dla EPSG:2180 z GetCapabilities Geoportalu
-    # Wartości zgodne z https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMTS/StandardResolution
-    origin_x = -5713134.0
-    origin_y = 8693134.0
-    tile_size = 256
+    # TopLeftCorner zgodny z oficjalną specyfikacją WMTS Geoportalu
+    # Źródło: https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMTS/StandardResolution?SERVICE=WMTS&REQUEST=GetCapabilities
+    origin_x = 0.0
+    origin_y = 850000.0
+    tile_size = 512  # Geoportal używa kafelków 512x512 dla StandardResolution
     
     # Rozdzielczość dla różnych poziomów zoom (metry na piksel)
-    # Źródło: GetCapabilities WMTS Geoportalu
+    # Źródło: GetCapabilities WMTS Geoportalu, obliczone ze ScaleDenominator × 0.00028
     resolutions = {
-        10: 1587.50317,
-        11: 793.75158,
-        12: 529.16772,
-        13: 264.58386,
-        14: 132.29193,
-        15: 66.14596,
-        16: 26.45839,
-        17: 13.22919,
-        18: 6.61460
+        0: 8466.68360,
+        1: 4233.34180,
+        2: 2116.67090,
+        3: 1058.33545,
+        4: 529.16773,
+        5: 264.58386,
+        6: 132.29193,
+        7: 66.14597,
+        8: 26.45839,
+        9: 13.22919,
+        10: 6.61460,
+        11: 2.64584,
+        12: 1.32292,
+        13: 0.52917,
+        14: 0.26458,
+        15: 0.13229
     }
     
-    resolution = resolutions.get(zoom_level, 132.29193)
+    resolution = resolutions.get(zoom_level, 132.29193)  # Default to zoom 6 if not found
     
     # Oblicz indeksy kafelka
+    # Origin jest w lewym górnym rogu (top-left), więc:
+    # - tile_col rośnie w prawo (na wschód): (x - origin_x)
+    # - tile_row rośnie w dół (na południe): (origin_y - y), bo Y rośnie na północ w EPSG:2180
     tile_col = int((x - origin_x) / (tile_size * resolution))
     tile_row = int((origin_y - y) / (tile_size * resolution))
     
