@@ -18,6 +18,15 @@ GEOPORTAL_WMS_URL = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/St
 OSM_STATIC_URL = "https://staticmap.openstreetmap.de/staticmap.php"
 GOOGLE_STATIC_URL = "https://maps.googleapis.com/maps/api/staticmap"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+DIGITS_RE = re.compile(r"\d+")
+TOKEN_RE = re.compile(r"[\w]+")
+HOUSE_MATCH_SCORE = 5.0
+DIGIT_MATCH_SCORE = 2.0
+ROAD_MATCH_SCORE = 2.0
+LOCALITY_MATCH_SCORE = 1.0
+PLACE_CLASS_SCORE = 2.0
+PLACE_TYPE_SCORE = 2.0
+IMPORTANCE_WEIGHT = 3.0
 
 
 def wgs84_do_epsg2180(lon, lat):
@@ -60,53 +69,46 @@ def geokoduj_adres(adres):
         return None
     try:
         adres_lower = adres.lower()
-        adres_tokens = set(re.findall(r"[\w]+", adres_lower))
-        digits = re.findall(r"\d+", adres)
+        adres_tokens = set(TOKEN_RE.findall(adres_lower))
+        digits = DIGITS_RE.findall(adres)
         digits_set = set(digits)
-        house_match_score = 5.0
-        digit_match_score = 2.0
-        road_match_score = 2.0
-        locality_match_score = 1.0
-        place_class_score = 2.0
-        place_type_score = 2.0
-        importance_weight = 3.0
 
         def score_candidate(kandydat):
             score = 0.0
             address = kandydat.get("address") or {}
             house_number = str(address.get("house_number", ""))
-            house_digits = re.findall(r"\d+", house_number)
+            house_digits = DIGITS_RE.findall(house_number)
             house_digits_set = set(house_digits)
             display_name = str(kandydat.get("display_name", ""))
             place_type = str(kandydat.get("type", ""))
             place_class = str(kandydat.get("class", ""))
 
             if house_digits_set and digits_set and house_digits_set & digits_set:
-                score += house_match_score
+                score += HOUSE_MATCH_SCORE
             elif digits_set:
-                display_digits_set = set(re.findall(r"\d+", display_name))
+                display_digits_set = set(DIGITS_RE.findall(display_name))
                 if display_digits_set & digits_set:
-                    score += digit_match_score
+                    score += DIGIT_MATCH_SCORE
 
             if address.get("road"):
-                road_tokens = set(re.findall(r"[\w]+", address["road"].lower()))
-                if road_tokens and len(road_tokens & adres_tokens) / len(road_tokens) >= 0.5:
-                    score += road_match_score
+                road_tokens = set(TOKEN_RE.findall(address["road"].lower()))
+                if road_tokens and adres_tokens and len(road_tokens & adres_tokens) / len(road_tokens) >= 0.5:
+                    score += ROAD_MATCH_SCORE
 
             for field in ("city", "town", "village", "municipality", "county"):
                 value = address.get(field)
                 if value and value.lower() in adres_lower:
-                    score += locality_match_score
+                    score += LOCALITY_MATCH_SCORE
                     break
 
             if place_class in ("building", "place"):
-                score += place_class_score
+                score += PLACE_CLASS_SCORE
             if place_type in ("house", "building", "residential", "apartments", "detached"):
-                score += place_type_score
+                score += PLACE_TYPE_SCORE
 
             importance = kandydat.get("importance")
             if isinstance(importance, (int, float)):
-                score += importance * importance_weight
+                score += importance * IMPORTANCE_WEIGHT
             return score
 
         params = {
