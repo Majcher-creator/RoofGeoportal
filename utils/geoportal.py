@@ -19,7 +19,7 @@ OSM_STATIC_URL = "https://staticmap.openstreetmap.de/staticmap.php"
 GOOGLE_STATIC_URL = "https://maps.googleapis.com/maps/api/staticmap"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 DIGITS_RE = re.compile(r"\d+")
-TOKEN_RE = re.compile(r"[\w]+")
+TOKEN_RE = re.compile(r"\w+")
 HOUSE_MATCH_SCORE = 5.0
 DIGIT_MATCH_SCORE = 2.0
 ROAD_MATCH_SCORE = 2.0
@@ -74,6 +74,7 @@ def geokoduj_adres(adres):
         digits_set = set(digits)
 
         def score_candidate(kandydat):
+            """Zwraca wynik dopasowania adresu na podstawie numeru, ulicy i typu."""
             score = 0.0
             address = kandydat.get("address") or {}
             house_number = str(address.get("house_number", ""))
@@ -92,8 +93,10 @@ def geokoduj_adres(adres):
 
             if address.get("road"):
                 road_tokens = set(TOKEN_RE.findall(address["road"].lower()))
-                if road_tokens and adres_tokens and len(road_tokens & adres_tokens) / len(road_tokens) >= 0.5:
-                    score += ROAD_MATCH_SCORE
+                if road_tokens and adres_tokens:
+                    road_overlap = len(road_tokens & adres_tokens) / len(road_tokens)
+                    if road_overlap >= 0.5:
+                        score += ROAD_MATCH_SCORE
 
             for field in ("city", "town", "village", "municipality", "county"):
                 value = address.get(field)
@@ -127,14 +130,11 @@ def geokoduj_adres(adres):
         dane = response.json()
         if not dane:
             return None
-        najlepszy = max(
-            dane,
-            key=lambda kandydat: (
-                score_candidate(kandydat),
-                kandydat.get("importance") or 0.0,
-                len(str(kandydat.get("display_name", "")))
-            )
-        )
+        def sort_key(kandydat):
+            display_name = str(kandydat.get("display_name", ""))
+            return (score_candidate(kandydat), len(display_name), display_name)
+
+        najlepszy = max(dane, key=sort_key)
         lat = float(najlepszy["lat"])
         lon = float(najlepszy["lon"])
         return lon, lat
