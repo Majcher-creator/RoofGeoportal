@@ -17,17 +17,35 @@
             <!-- Sekcja wyszukiwania -->
             <section class="search-section">
                 <h2>1. Załaduj mapę</h2>
+                <div class="input-row map-source-row">
+                    <label>
+                        <span class="label-text">Źródło mapy:</span>
+                        <select id="map-source-select" class="map-source-select">
+                            <option value="geoportal">Geoportal (ortofoto)</option>
+                            <option value="google_maps">Google Maps (satelita)</option>
+                            <option value="openstreetmap">OpenStreetMap</option>
+                        </select>
+                    </label>
+                    <label class="google-key-label">
+                        <span class="label-text">Klucz Google Maps:</span>
+                        <input
+                            type="password"
+                            id="google-api-key-input"
+                            placeholder="Wprowadź klucz API (opcjonalnie)"
+                        >
+                    </label>
+                </div>
                 <div class="input-group">
                     <input 
                         type="text" 
                         id="wspolrzedne-input" 
-                        placeholder="Wprowadź współrzędne GPS (np. 52.2297 21.0122) lub wpisz 'demo'"
+                        placeholder="Wprowadź adres lub współrzędne GPS (np. 52.2297 21.0122) lub wpisz 'demo'"
                         value="52.2297 21.0122"
                     >
                     <button id="zaladuj-mape-btn" class="btn btn-primary">Załaduj mapę</button>
                     <button id="demo-btn" class="btn btn-secondary">Tryb DEMO</button>
                 </div>
-                <p class="hint">Przykład: 52.2297 21.0122 (Warszawa) lub wpisz "demo" dla mapy testowej</p>
+                <p class="hint">Przykład: 52.2297 21.0122 (Warszawa), adres "Plac Zamkowy Warszawa" lub wpisz "demo" dla mapy testowej</p>
             </section>
 
             <!-- Interaktywna mapa -->

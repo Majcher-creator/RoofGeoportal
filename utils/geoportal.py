@@ -14,6 +14,9 @@ from pyproj import Transformer
 GEOPORTAL_WMTS_URL = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMTS/StandardResolution"
 # Alternatywny URL WMS jako fallback
 GEOPORTAL_WMS_URL = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution"
+OSM_STATIC_URL = "https://staticmap.openstreetmap.de/staticmap.php"
+GOOGLE_STATIC_URL = "https://maps.googleapis.com/maps/api/staticmap"
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 
 
 def wgs84_do_epsg2180(lon, lat):
@@ -46,6 +49,32 @@ def epsg2180_do_wgs84(x, y):
     transformer = Transformer.from_crs("EPSG:2180", "EPSG:4326", always_xy=True)
     lon, lat = transformer.transform(x, y)
     return lon, lat
+
+
+def geokoduj_adres(adres):
+    """
+    Zamienia adres na współrzędne GPS (WGS84) przy użyciu Nominatim.
+    """
+    if not adres:
+        return None
+    try:
+        params = {
+            "q": adres,
+            "format": "json",
+            "limit": 1
+        }
+        headers = {"User-Agent": "RoofGeoportal/1.0"}
+        response = requests.get(NOMINATIM_URL, params=params, headers=headers, timeout=10)
+        if response.status_code != 200:
+            return None
+        dane = response.json()
+        if not dane:
+            return None
+        lat = float(dane[0]["lat"])
+        lon = float(dane[0]["lon"])
+        return lon, lat
+    except Exception:
+        return None
 
 
 def pobierz_kafelek_wmts(tile_col, tile_row, zoom_level=14):
@@ -332,9 +361,62 @@ def pobierz_mape_2x2(tile_col, tile_row, zoom_level, center_x, center_y, width, 
     return result
 
 
-def pobierz_mape_dla_wspolrzednych(wspolrzedne_text, szerokosc=800, wysokosc=600):
+def pobierz_mape_openstreetmap(lon, lat, szerokosc_pikseli=800, wysokosc_pikseli=600, zoom=18):
     """
-    Parsuje tekst współrzędnych i pobiera mapę
+    Pobiera statyczną mapę z OpenStreetMap.
+    """
+    try:
+        params = {
+            "center": f"{lat},{lon}",
+            "zoom": str(zoom),
+            "size": f"{szerokosc_pikseli}x{wysokosc_pikseli}",
+            "maptype": "mapnik"
+        }
+        response = requests.get(OSM_STATIC_URL, params=params, timeout=10)
+        if response.status_code != 200:
+            return None
+        content_type = response.headers.get("Content-Type", "")
+        if not content_type.startswith("image/"):
+            return None
+        return Image.open(BytesIO(response.content))
+    except Exception:
+        return None
+
+
+def pobierz_mape_google(lon, lat, szerokosc_pikseli=800, wysokosc_pikseli=600, zoom=19, api_key=None):
+    """
+    Pobiera statyczną mapę z Google Maps (wymaga klucza API).
+    """
+    if not api_key:
+        return None
+    try:
+        params = {
+            "center": f"{lat},{lon}",
+            "zoom": str(zoom),
+            "size": f"{szerokosc_pikseli}x{wysokosc_pikseli}",
+            "maptype": "satellite",
+            "key": api_key
+        }
+        response = requests.get(GOOGLE_STATIC_URL, params=params, timeout=10)
+        if response.status_code != 200:
+            return None
+        content_type = response.headers.get("Content-Type", "")
+        if not content_type.startswith("image/"):
+            return None
+        return Image.open(BytesIO(response.content))
+    except Exception:
+        return None
+
+
+def pobierz_mape_dla_wspolrzednych(
+    wspolrzedne_text,
+    szerokosc=800,
+    wysokosc=600,
+    map_source="geoportal",
+    google_api_key=None
+):
+    """
+    Parsuje tekst współrzędnych/adres i pobiera mapę z wybranego źródła.
     
     Args:
         wspolrzedne_text: Tekst ze współrzędnymi (np. "52.2297,21.0122" lub adres)
@@ -342,7 +424,7 @@ def pobierz_mape_dla_wspolrzednych(wspolrzedne_text, szerokosc=800, wysokosc=600
         wysokosc: Wysokość obrazu
         
     Returns:
-        tuple: (PIL.Image, lon, lat) lub (None, None, None)
+        tuple: (PIL.Image, lon, lat, error_message) lub (None, None, None, error_message)
     """
     try:
         # Spróbuj sparsować jako współrzędne
@@ -350,13 +432,37 @@ def pobierz_mape_dla_wspolrzednych(wspolrzedne_text, szerokosc=800, wysokosc=600
         if len(parts) >= 2:
             lat = float(parts[0])
             lon = float(parts[1])
-            
-            mapa = pobierz_mape_dla_obszaru(lon, lat, szerokosc, wysokosc)
-            return mapa, lon, lat
-    except:
-        pass
-    
-    # Jeśli nie udało się sparsować jako współrzędne, 
-    # można tu dodać geokodowanie adresu (wymaga dodatkowej usługi)
-    # Na razie zwróćmy None
-    return None, None, None
+        else:
+            lon = None
+            lat = None
+    except Exception:
+        lon = None
+        lat = None
+
+    if lon is None or lat is None:
+        wynik = geokoduj_adres(wspolrzedne_text)
+        if not wynik:
+            return None, None, None, "Nie udało się rozpoznać adresu lub współrzędnych."
+        lon, lat = wynik
+
+    if map_source == "geoportal":
+        mapa = pobierz_mape_dla_obszaru(lon, lat, szerokosc, wysokosc)
+        if mapa is None:
+            return None, lon, lat, "Nie udało się pobrać mapy z Geoportalu."
+        return mapa, lon, lat, None
+
+    if map_source == "openstreetmap":
+        mapa = pobierz_mape_openstreetmap(lon, lat, szerokosc, wysokosc)
+        if mapa is None:
+            return None, lon, lat, "Nie udało się pobrać mapy z OpenStreetMap."
+        return mapa, lon, lat, None
+
+    if map_source == "google_maps":
+        if not google_api_key:
+            return None, lon, lat, "Brak klucza API Google Maps."
+        mapa = pobierz_mape_google(lon, lat, szerokosc, wysokosc, api_key=google_api_key)
+        if mapa is None:
+            return None, lon, lat, "Nie udało się pobrać mapy z Google Maps."
+        return mapa, lon, lat, None
+
+    return None, lon, lat, "Nieznane źródło mapy."

@@ -117,12 +117,15 @@ Przejdź do adresu: **http://localhost:5000**
 
 ### Krok 1: Załaduj mapę
 
-1. W polu "Wprowadź współrzędne GPS" wpisz współrzędne w formacie:
+1. Wybierz **źródło mapy** (Geoportal, Google Maps lub OpenStreetMap).
+2. W polu "Wprowadź adres lub współrzędne GPS" wpisz dane w formacie:
    - `szerokość długość` (np. `52.2297 21.0122`)
+   - pełny adres (np. `Plac Zamkowy Warszawa`)
    - Separator: spacja lub przecinek
    - Lub wpisz **"demo"** aby załadować mapę testową
 
-2. Kliknij **"Załaduj mapę"** lub **"Tryb DEMO"**
+3. Jeśli wybierasz Google Maps, opcjonalnie podaj **klucz API**.
+4. Kliknij **"Załaduj mapę"** lub **"Tryb DEMO"**
 
 **Przykładowe współrzędne:**
 - Warszawa, Plac Zamkowy: `52.2297 21.0122`
@@ -246,14 +249,16 @@ RoofGeoportal/
 Strona główna aplikacji
 
 ### `POST /api/get_map`
-Pobieranie mapy z Geoportalu
+Pobieranie mapy z Geoportalu, Google Maps lub OpenStreetMap
 
 **Request body:**
 ```json
 {
-  "wspolrzedne": "52.2297 21.0122",
+  "wspolrzedne": "Plac Zamkowy Warszawa",
   "szerokosc": 800,
-  "wysokosc": 600
+  "wysokosc": 600,
+  "map_source": "geoportal",
+  "google_api_key": "opcjonalnie"
 }
 ```
 

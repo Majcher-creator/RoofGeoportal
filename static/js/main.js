@@ -37,6 +37,8 @@ const elements = {
     canvas: null,
     ctx: null,
     wspolrzedneInput: null,
+    mapSourceSelect: null,
+    googleApiKeyInput: null,
     zaladujMapeBtn: null,
     resetujPunktyBtn: null,
     wybierzABtn: null,
@@ -58,6 +60,8 @@ function init() {
     elements.canvas = document.getElementById('mapa-canvas');
     elements.ctx = elements.canvas.getContext('2d');
     elements.wspolrzedneInput = document.getElementById('wspolrzedne-input');
+    elements.mapSourceSelect = document.getElementById('map-source-select');
+    elements.googleApiKeyInput = document.getElementById('google-api-key-input');
     elements.zaladujMapeBtn = document.getElementById('zaladuj-mape-btn');
     elements.resetujPunktyBtn = document.getElementById('resetuj-punkty-btn');
     elements.wybierzABtn = document.getElementById('wybierz-a-btn');
@@ -94,6 +98,11 @@ function init() {
         }
     });
 
+    if (elements.mapSourceSelect) {
+        elements.mapSourceSelect.addEventListener('change', aktualizujPoleGoogleApi);
+        aktualizujPoleGoogleApi();
+    }
+
     console.log('RoofGeoportal zainicjalizowany');
 }
 
@@ -102,6 +111,8 @@ function init() {
  */
 async function zaladujMape() {
     const wspolrzedne = elements.wspolrzedneInput.value.trim();
+    const mapSource = elements.mapSourceSelect ? elements.mapSourceSelect.value : 'geoportal';
+    const googleApiKey = elements.googleApiKeyInput ? elements.googleApiKeyInput.value.trim() : '';
 
     if (!wspolrzedne) {
         pokazKomunikat('Wprowadź współrzędne lub adres', 'error');
@@ -119,7 +130,9 @@ async function zaladujMape() {
             body: JSON.stringify({
                 wspolrzedne: wspolrzedne,
                 szerokosc: CONFIG.canvasWidth,
-                wysokosc: CONFIG.canvasHeight
+                wysokosc: CONFIG.canvasHeight,
+                map_source: mapSource,
+                google_api_key: googleApiKey
             })
         });
 
@@ -150,6 +163,18 @@ async function zaladujMape() {
     } finally {
         pokazLadowanie(false);
     }
+}
+
+function aktualizujPoleGoogleApi() {
+    if (!elements.googleApiKeyInput || !elements.mapSourceSelect) {
+        return;
+    }
+    const czyGoogle = elements.mapSourceSelect.value === 'google_maps';
+    elements.googleApiKeyInput.disabled = !czyGoogle;
+    elements.googleApiKeyInput.value = czyGoogle ? elements.googleApiKeyInput.value : '';
+    elements.googleApiKeyInput.placeholder = czyGoogle
+        ? 'Wprowadź klucz API Google Maps'
+        : 'Klucz Google Maps (tylko dla Google Maps)';
 }
 
 /**
