@@ -45,6 +45,9 @@ def get_map():
         szerokosc = data.get('szerokosc', 800)
         wysokosc = data.get('wysokosc', 600)
         demo_mode = data.get('demo', False)
+        demo_used = False
+        notice = None
+        notice_level = None
         
         if not wspolrzedne:
             return jsonify({
@@ -58,6 +61,9 @@ def get_map():
             if os.path.exists(demo_image_path):
                 mapa = Image.open(demo_image_path)
                 lon, lat = 21.0122, 52.2297  # Warszawa
+                demo_used = True
+                notice = 'Załadowano mapę demonstracyjną (tryb DEMO)'
+                notice_level = 'info'
             else:
                 return jsonify({
                     'success': False,
@@ -78,6 +84,9 @@ def get_map():
                     mapa = Image.open(demo_image_path)
                     lon, lat = 21.0122, 52.2297
                     app.logger.warning('Geoportal niedostępny - użyto mapy demonstracyjnej')
+                    demo_used = True
+                    notice = 'Geoportal niedostępny - użyto mapy demonstracyjnej'
+                    notice_level = 'warning'
                 else:
                     return jsonify({
                         'success': False,
@@ -90,14 +99,21 @@ def get_map():
         buffer.seek(0)
         img_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
         
-        return jsonify({
+        response = {
             'success': True,
             'image': img_base64,
             'lon': lon,
             'lat': lat,
             'szerokosc': mapa.width,
-            'wysokosc': mapa.height
-        })
+            'wysokosc': mapa.height,
+            'demo': demo_used
+        }
+        if notice:
+            response['notice'] = notice
+        if notice_level:
+            response['notice_level'] = notice_level
+
+        return jsonify(response)
         
     except Exception as e:
         app.logger.error(f'Błąd w get_map: {str(e)}')

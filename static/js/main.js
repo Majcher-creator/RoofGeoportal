@@ -131,7 +131,11 @@ async function zaladujMape() {
             img.onload = () => {
                 state.obrazMapy = img;
                 rysujCanvas();
-                pokazKomunikat('Mapa załadowana pomyślnie', 'success');
+                if (data.notice) {
+                    pokazKomunikat(data.notice, data.notice_level || 'info');
+                } else {
+                    pokazKomunikat('Mapa załadowana pomyślnie', 'success');
+                }
             };
             img.src = 'data:image/png;base64,' + data.image;
 
