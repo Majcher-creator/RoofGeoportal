@@ -84,6 +84,7 @@ section h2 {
 }
 
 .map-source-row {
+    display: flex;
     flex-wrap: wrap;
     gap: 20px;
 }

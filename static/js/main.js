@@ -171,7 +171,6 @@ function aktualizujPoleGoogleApi() {
     }
     const czyGoogle = elements.mapSourceSelect.value === 'google_maps';
     elements.googleApiKeyInput.disabled = !czyGoogle;
-    elements.googleApiKeyInput.value = czyGoogle ? elements.googleApiKeyInput.value : '';
     elements.googleApiKeyInput.placeholder = czyGoogle
         ? 'Wprowadź klucz API Google Maps'
         : 'Klucz Google Maps (tylko dla Google Maps)';
