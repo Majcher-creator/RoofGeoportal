@@ -4,6 +4,7 @@ Pobieranie ortofotomap z polskiego Geoportalu
 """
 
 import requests
+import re
 from io import BytesIO
 from PIL import Image, UnidentifiedImageError
 import math
@@ -58,10 +59,47 @@ def geokoduj_adres(adres):
     if not adres:
         return None
     try:
+        adres_lower = adres.lower()
+        digits = re.findall(r"\d+", adres)
+
+        def score_candidate(kandydat):
+            score = 0.0
+            address = kandydat.get("address") or {}
+            house_number = str(address.get("house_number", ""))
+            display_name = str(kandydat.get("display_name", ""))
+            place_type = str(kandydat.get("type", ""))
+            place_class = str(kandydat.get("class", ""))
+
+            if house_number and digits and any(digit in house_number for digit in digits):
+                score += 5.0
+            elif digits and any(digit in display_name for digit in digits):
+                score += 2.0
+
+            if address.get("road") and address["road"].lower() in adres_lower:
+                score += 2.0
+
+            for field in ("city", "town", "village", "municipality", "county"):
+                value = address.get(field)
+                if value and value.lower() in adres_lower:
+                    score += 1.0
+                    break
+
+            if place_class in ("building", "place"):
+                score += 2.0
+            if place_type in ("house", "building", "residential", "apartments", "detached"):
+                score += 2.0
+
+            importance = kandydat.get("importance")
+            if isinstance(importance, (int, float)):
+                score += importance
+            return score
+
         params = {
             "q": adres,
             "format": "json",
-            "limit": 1
+            "limit": 5,
+            "addressdetails": 1,
+            "countrycodes": "pl"
         }
         headers = {
             "User-Agent": "RoofGeoportal/1.0 (https://github.com/Majcher-creator/RoofGeoportal)"
@@ -72,8 +110,9 @@ def geokoduj_adres(adres):
         dane = response.json()
         if not dane:
             return None
-        lat = float(dane[0]["lat"])
-        lon = float(dane[0]["lon"])
+        najlepszy = max(dane, key=score_candidate)
+        lat = float(najlepszy["lat"])
+        lon = float(najlepszy["lon"])
         return lon, lat
     except (requests.RequestException, ValueError, KeyError, IndexError, TypeError):
         return None
