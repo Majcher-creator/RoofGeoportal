@@ -60,38 +60,49 @@ def geokoduj_adres(adres):
         return None
     try:
         adres_lower = adres.lower()
+        adres_tokens = set(re.findall(r"[\w]+", adres_lower))
         digits = re.findall(r"\d+", adres)
+        house_match_score = 5.0
+        digit_match_score = 2.0
+        road_match_score = 2.0
+        locality_match_score = 1.0
+        place_class_score = 2.0
+        place_type_score = 2.0
+        importance_weight = 3.0
 
         def score_candidate(kandydat):
             score = 0.0
             address = kandydat.get("address") or {}
             house_number = str(address.get("house_number", ""))
+            house_digits = re.findall(r"\d+", house_number)
             display_name = str(kandydat.get("display_name", ""))
             place_type = str(kandydat.get("type", ""))
             place_class = str(kandydat.get("class", ""))
 
-            if house_number and digits and any(digit in house_number for digit in digits):
-                score += 5.0
-            elif digits and any(digit in display_name for digit in digits):
-                score += 2.0
+            if house_digits and digits and any(digit == house_digit for digit in digits for house_digit in house_digits):
+                score += house_match_score
+            elif digits and any(digit == display_digit for digit in digits for display_digit in re.findall(r"\d+", display_name)):
+                score += digit_match_score
 
-            if address.get("road") and address["road"].lower() in adres_lower:
-                score += 2.0
+            if address.get("road"):
+                road_tokens = set(re.findall(r"[\w]+", address["road"].lower()))
+                if road_tokens and road_tokens.issubset(adres_tokens):
+                    score += road_match_score
 
             for field in ("city", "town", "village", "municipality", "county"):
                 value = address.get(field)
                 if value and value.lower() in adres_lower:
-                    score += 1.0
+                    score += locality_match_score
                     break
 
             if place_class in ("building", "place"):
-                score += 2.0
+                score += place_class_score
             if place_type in ("house", "building", "residential", "apartments", "detached"):
-                score += 2.0
+                score += place_type_score
 
             importance = kandydat.get("importance")
             if isinstance(importance, (int, float)):
-                score += importance
+                score += importance * importance_weight
             return score
 
         params = {
@@ -110,7 +121,14 @@ def geokoduj_adres(adres):
         dane = response.json()
         if not dane:
             return None
-        najlepszy = max(dane, key=score_candidate)
+        najlepszy = max(
+            dane,
+            key=lambda kandydat: (
+                score_candidate(kandydat),
+                kandydat.get("importance") or 0.0,
+                len(str(kandydat.get("display_name", "")))
+            )
+        )
         lat = float(najlepszy["lat"])
         lon = float(najlepszy["lon"])
         return lon, lat
