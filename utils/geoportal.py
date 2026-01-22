@@ -63,7 +63,9 @@ def geokoduj_adres(adres):
             "format": "json",
             "limit": 1
         }
-        headers = {"User-Agent": "RoofGeoportal/1.0 (contact: support@roofgeoportal.local)"}
+        headers = {
+            "User-Agent": "RoofGeoportal/1.0 (https://github.com/Majcher-creator/RoofGeoportal)"
+        }
         response = requests.get(NOMINATIM_URL, params=params, headers=headers, timeout=10)
         if response.status_code != 200:
             return None
@@ -413,7 +415,8 @@ def pobierz_mape_dla_wspolrzednych(
     szerokosc=800,
     wysokosc=600,
     map_source="geoportal",
-    google_api_key=None
+    google_api_key=None,
+    return_error=False
 ):
     """
     Parsuje tekst współrzędnych/adres i pobiera mapę z wybranego źródła.
@@ -424,9 +427,10 @@ def pobierz_mape_dla_wspolrzednych(
         wysokosc: Wysokość obrazu
         map_source: Źródło mapy ("geoportal", "google_maps", "openstreetmap")
         google_api_key: Klucz API Google Maps (opcjonalny)
+        return_error: Jeśli True zwraca także komunikat błędu
         
     Returns:
-        tuple: (PIL.Image, lon, lat, error_message) lub (None, None, None, error_message)
+        tuple: (PIL.Image, lon, lat) lub z error_message gdy return_error=True
     """
     try:
         # Spróbuj sparsować jako współrzędne
@@ -444,27 +448,45 @@ def pobierz_mape_dla_wspolrzednych(
     if lon is None or lat is None:
         wynik = geokoduj_adres(wspolrzedne_text)
         if not wynik:
-            return None, None, None, "Nie udało się rozpoznać adresu lub współrzędnych."
+            if return_error:
+                return None, None, None, "Nie udało się rozpoznać adresu lub współrzędnych."
+            return None, None, None
         lon, lat = wynik
 
     if map_source == "geoportal":
         mapa = pobierz_mape_dla_obszaru(lon, lat, szerokosc, wysokosc)
         if mapa is None:
-            return None, lon, lat, "Nie udało się pobrać mapy z Geoportalu."
-        return mapa, lon, lat, None
+            if return_error:
+                return None, lon, lat, "Nie udało się pobrać mapy z Geoportalu."
+            return None, lon, lat
+        if return_error:
+            return mapa, lon, lat, None
+        return mapa, lon, lat
 
     if map_source == "openstreetmap":
         mapa = pobierz_mape_openstreetmap(lon, lat, szerokosc, wysokosc)
         if mapa is None:
-            return None, lon, lat, "Nie udało się pobrać mapy z OpenStreetMap."
-        return mapa, lon, lat, None
+            if return_error:
+                return None, lon, lat, "Nie udało się pobrać mapy z OpenStreetMap."
+            return None, lon, lat
+        if return_error:
+            return mapa, lon, lat, None
+        return mapa, lon, lat
 
     if map_source == "google_maps":
         if not google_api_key:
-            return None, lon, lat, "Brak klucza API Google Maps."
+            if return_error:
+                return None, lon, lat, "Brak klucza API Google Maps."
+            return None, lon, lat
         mapa = pobierz_mape_google(lon, lat, szerokosc, wysokosc, api_key=google_api_key)
         if mapa is None:
-            return None, lon, lat, "Nie udało się pobrać mapy z Google Maps."
-        return mapa, lon, lat, None
+            if return_error:
+                return None, lon, lat, "Nie udało się pobrać mapy z Google Maps."
+            return None, lon, lat
+        if return_error:
+            return mapa, lon, lat, None
+        return mapa, lon, lat
 
-    return None, lon, lat, "Nieznane źródło mapy."
+    if return_error:
+        return None, lon, lat, "Nieznane źródło mapy."
+    return None, lon, lat

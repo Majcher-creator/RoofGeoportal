@@ -78,7 +78,8 @@ def get_map():
                 szerokosc,
                 wysokosc,
                 map_source=map_source,
-                google_api_key=google_api_key
+                google_api_key=google_api_key,
+                return_error=True
             )
             
             # Jeśli nie udało się pobrać z Geoportalu, użyj trybu demo
