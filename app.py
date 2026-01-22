@@ -6,6 +6,8 @@ from flask import Flask, render_template, request, jsonify, send_file
 from io import BytesIO
 import base64
 import json
+import os
+from PIL import Image
 
 from utils.geoportal import pobierz_mape_dla_wspolrzednych
 from utils.calculations import AnalizatorDachu, oblicz_skale
@@ -13,6 +15,7 @@ from utils.calculations import AnalizatorDachu, oblicz_skale
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'roof-geoportal-secret-key-2024'
+app.config['GOOGLE_MAPS_API_KEY'] = os.environ.get('GOOGLE_MAPS_API_KEY', '')
 
 
 @app.route('/')
@@ -36,15 +39,14 @@ def get_map():
         JSON z obrazem mapy w base64
     """
     try:
-        from PIL import Image
-        import os
-        
         data = request.get_json()
         
         wspolrzedne = data.get('wspolrzedne', '')
         szerokosc = data.get('szerokosc', 800)
         wysokosc = data.get('wysokosc', 600)
         demo_mode = data.get('demo', False)
+        map_source = data.get('map_source', 'geoportal')
+        google_api_key = data.get('google_api_key') or app.config.get('GOOGLE_MAPS_API_KEY')
         demo_used = False
         notice = None
         notice_level = None
@@ -71,10 +73,13 @@ def get_map():
                 }), 400
         else:
             # Pobierz mapę z Geoportalu
-            mapa, lon, lat = pobierz_mape_dla_wspolrzednych(
+            mapa, lon, lat, error_message = pobierz_mape_dla_wspolrzednych(
                 wspolrzedne,
                 szerokosc,
-                wysokosc
+                wysokosc,
+                map_source=map_source,
+                google_api_key=google_api_key,
+                return_error=True
             )
             
             # Jeśli nie udało się pobrać z Geoportalu, użyj trybu demo
@@ -83,14 +88,14 @@ def get_map():
                 if os.path.exists(demo_image_path):
                     mapa = Image.open(demo_image_path)
                     lon, lat = 21.0122, 52.2297
-                    app.logger.warning('Geoportal niedostępny - użyto mapy demonstracyjnej')
+                    app.logger.warning('Mapa niedostępna - użyto mapy demonstracyjnej')
                     demo_used = True
-                    notice = 'Geoportal niedostępny - użyto mapy demonstracyjnej'
+                    notice = error_message or 'Mapa niedostępna - użyto mapy demonstracyjnej'
                     notice_level = 'warning'
                 else:
                     return jsonify({
                         'success': False,
-                        'error': 'Nie udało się pobrać mapy. Sprawdź współrzędne lub połączenie z Geoportalem.'
+                        'error': error_message or 'Nie udało się pobrać mapy. Sprawdź dane wejściowe.'
                     }), 400
         
         # Konwertuj obraz do base64
@@ -213,7 +218,6 @@ def health():
 
 
 if __name__ == '__main__':
-    import os
     port = int(os.environ.get('PORT', 5000))
     
     print("=" * 60)

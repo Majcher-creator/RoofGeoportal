@@ -4,8 +4,9 @@ Pobieranie ortofotomap z polskiego Geoportalu
 """
 
 import requests
+import re
 from io import BytesIO
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 import math
 from pyproj import Transformer
 
@@ -14,6 +15,18 @@ from pyproj import Transformer
 GEOPORTAL_WMTS_URL = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMTS/StandardResolution"
 # Alternatywny URL WMS jako fallback
 GEOPORTAL_WMS_URL = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMS/StandardResolution"
+OSM_STATIC_URL = "https://staticmap.openstreetmap.de/staticmap.php"
+GOOGLE_STATIC_URL = "https://maps.googleapis.com/maps/api/staticmap"
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+DIGITS_RE = re.compile(r"\d+")
+TOKEN_RE = re.compile(r"\w+")
+HOUSE_MATCH_SCORE = 5.0
+DIGIT_MATCH_SCORE = 2.0
+ROAD_MATCH_SCORE = 2.0
+LOCALITY_MATCH_SCORE = 1.0
+PLACE_CLASS_SCORE = 2.0
+PLACE_TYPE_SCORE = 2.0
+IMPORTANCE_WEIGHT = 3.0
 
 
 def wgs84_do_epsg2180(lon, lat):
@@ -46,6 +59,88 @@ def epsg2180_do_wgs84(x, y):
     transformer = Transformer.from_crs("EPSG:2180", "EPSG:4326", always_xy=True)
     lon, lat = transformer.transform(x, y)
     return lon, lat
+
+
+def geokoduj_adres(adres):
+    """
+    Zamienia adres na współrzędne GPS (WGS84) przy użyciu Nominatim.
+    """
+    if not adres:
+        return None
+    try:
+        adres_lower = adres.lower()
+        adres_tokens = set(TOKEN_RE.findall(adres_lower))
+        digits = DIGITS_RE.findall(adres)
+        digits_set = set(digits)
+
+        def score_candidate(kandydat):
+            """Zwraca wynik dopasowania adresu na podstawie numeru, ulicy i typu."""
+            score = 0.0
+            address = kandydat.get("address") or {}
+            house_number = str(address.get("house_number", ""))
+            house_digits = DIGITS_RE.findall(house_number)
+            house_digits_set = set(house_digits)
+            display_name = str(kandydat.get("display_name", ""))
+            place_type = str(kandydat.get("type", ""))
+            place_class = str(kandydat.get("class", ""))
+
+            if house_digits_set and digits_set and house_digits_set & digits_set:
+                score += HOUSE_MATCH_SCORE
+            elif digits_set:
+                display_digits_set = set(DIGITS_RE.findall(display_name))
+                if display_digits_set & digits_set:
+                    score += DIGIT_MATCH_SCORE
+
+            if address.get("road"):
+                road_tokens = set(TOKEN_RE.findall(address["road"].lower()))
+                if road_tokens and adres_tokens:
+                    road_overlap = len(road_tokens & adres_tokens) / len(road_tokens)
+                    if road_overlap >= 0.5:
+                        score += ROAD_MATCH_SCORE
+
+            for field in ("city", "town", "village", "municipality", "county"):
+                value = address.get(field)
+                if value and value.lower() in adres_lower:
+                    score += LOCALITY_MATCH_SCORE
+                    break
+
+            if place_class in ("building", "place"):
+                score += PLACE_CLASS_SCORE
+            if place_type in ("house", "building", "residential", "apartments", "detached"):
+                score += PLACE_TYPE_SCORE
+
+            importance = kandydat.get("importance")
+            if isinstance(importance, (int, float)):
+                score += importance * IMPORTANCE_WEIGHT
+            return score
+
+        params = {
+            "q": adres,
+            "format": "json",
+            "limit": 5,
+            "addressdetails": 1,
+            "countrycodes": "pl"
+        }
+        headers = {
+            "User-Agent": "RoofGeoportal/1.0 (https://github.com/Majcher-creator/RoofGeoportal)"
+        }
+        response = requests.get(NOMINATIM_URL, params=params, headers=headers, timeout=10)
+        if response.status_code != 200:
+            return None
+        dane = response.json()
+        if not dane:
+            return None
+        def sort_key(kandydat):
+            # Tie-breaker: prefer longer, more descriptive display names after score.
+            display_name = str(kandydat.get("display_name", ""))
+            return (score_candidate(kandydat), len(display_name), display_name)
+
+        najlepszy = max(dane, key=sort_key)
+        lat = float(najlepszy["lat"])
+        lon = float(najlepszy["lon"])
+        return lon, lat
+    except (requests.RequestException, ValueError, KeyError, IndexError, TypeError):
+        return None
 
 
 def pobierz_kafelek_wmts(tile_col, tile_row, zoom_level=14):
@@ -332,17 +427,74 @@ def pobierz_mape_2x2(tile_col, tile_row, zoom_level, center_x, center_y, width, 
     return result
 
 
-def pobierz_mape_dla_wspolrzednych(wspolrzedne_text, szerokosc=800, wysokosc=600):
+def pobierz_mape_openstreetmap(lon, lat, szerokosc_pikseli=800, wysokosc_pikseli=600, zoom=18):
     """
-    Parsuje tekst współrzędnych i pobiera mapę
+    Pobiera statyczną mapę z OpenStreetMap.
+    """
+    try:
+        params = {
+            "center": f"{lat},{lon}",
+            "zoom": str(zoom),
+            "size": f"{szerokosc_pikseli}x{wysokosc_pikseli}",
+            "maptype": "mapnik"
+        }
+        response = requests.get(OSM_STATIC_URL, params=params, timeout=10)
+        if response.status_code != 200:
+            return None
+        content_type = response.headers.get("Content-Type", "")
+        if not content_type.startswith("image/"):
+            return None
+        return Image.open(BytesIO(response.content))
+    except (requests.RequestException, UnidentifiedImageError, OSError):
+        return None
+
+
+def pobierz_mape_google(lon, lat, szerokosc_pikseli=800, wysokosc_pikseli=600, zoom=19, api_key=None):
+    """
+    Pobiera statyczną mapę z Google Maps (wymaga klucza API).
+    """
+    if not api_key:
+        return None
+    try:
+        params = {
+            "center": f"{lat},{lon}",
+            "zoom": str(zoom),
+            "size": f"{szerokosc_pikseli}x{wysokosc_pikseli}",
+            "maptype": "satellite",
+            "key": api_key
+        }
+        response = requests.get(GOOGLE_STATIC_URL, params=params, timeout=10)
+        if response.status_code != 200:
+            return None
+        content_type = response.headers.get("Content-Type", "")
+        if not content_type.startswith("image/"):
+            return None
+        return Image.open(BytesIO(response.content))
+    except (requests.RequestException, UnidentifiedImageError, OSError):
+        return None
+
+
+def pobierz_mape_dla_wspolrzednych(
+    wspolrzedne_text,
+    szerokosc=800,
+    wysokosc=600,
+    map_source="geoportal",
+    google_api_key=None,
+    return_error=False
+):
+    """
+    Parsuje tekst współrzędnych/adres i pobiera mapę z wybranego źródła.
     
     Args:
         wspolrzedne_text: Tekst ze współrzędnymi (np. "52.2297,21.0122" lub adres)
         szerokosc: Szerokość obrazu
         wysokosc: Wysokość obrazu
+        map_source: Źródło mapy ("geoportal", "google_maps", "openstreetmap")
+        google_api_key: Klucz API Google Maps (opcjonalny)
+        return_error: Jeśli True zwraca także komunikat błędu
         
     Returns:
-        tuple: (PIL.Image, lon, lat) lub (None, None, None)
+        tuple: (PIL.Image, lon, lat) lub z error_message gdy return_error=True
     """
     try:
         # Spróbuj sparsować jako współrzędne
@@ -350,13 +502,55 @@ def pobierz_mape_dla_wspolrzednych(wspolrzedne_text, szerokosc=800, wysokosc=600
         if len(parts) >= 2:
             lat = float(parts[0])
             lon = float(parts[1])
-            
-            mapa = pobierz_mape_dla_obszaru(lon, lat, szerokosc, wysokosc)
-            return mapa, lon, lat
-    except:
-        pass
-    
-    # Jeśli nie udało się sparsować jako współrzędne, 
-    # można tu dodać geokodowanie adresu (wymaga dodatkowej usługi)
-    # Na razie zwróćmy None
-    return None, None, None
+        else:
+            lon = None
+            lat = None
+    except (ValueError, TypeError):
+        lon = None
+        lat = None
+
+    if lon is None or lat is None:
+        wynik = geokoduj_adres(wspolrzedne_text)
+        if not wynik:
+            if return_error:
+                return None, None, None, "Nie udało się rozpoznać adresu lub współrzędnych."
+            return None, None, None
+        lon, lat = wynik
+
+    if map_source == "geoportal":
+        mapa = pobierz_mape_dla_obszaru(lon, lat, szerokosc, wysokosc)
+        if mapa is None:
+            if return_error:
+                return None, lon, lat, "Nie udało się pobrać mapy z Geoportalu."
+            return None, lon, lat
+        if return_error:
+            return mapa, lon, lat, None
+        return mapa, lon, lat
+
+    if map_source == "openstreetmap":
+        mapa = pobierz_mape_openstreetmap(lon, lat, szerokosc, wysokosc)
+        if mapa is None:
+            if return_error:
+                return None, lon, lat, "Nie udało się pobrać mapy z OpenStreetMap."
+            return None, lon, lat
+        if return_error:
+            return mapa, lon, lat, None
+        return mapa, lon, lat
+
+    if map_source == "google_maps":
+        if not google_api_key:
+            if return_error:
+                return None, lon, lat, "Brak klucza API Google Maps."
+            return None, lon, lat
+        mapa = pobierz_mape_google(lon, lat, szerokosc, wysokosc, api_key=google_api_key)
+        if mapa is None:
+            if return_error:
+                return None, lon, lat, "Nie udało się pobrać mapy z Google Maps."
+            return None, lon, lat
+        if return_error:
+            return mapa, lon, lat, None
+        return mapa, lon, lat
+
+    if return_error:
+        return None, lon, lat, "Nieznane źródło mapy."
+    return None, lon, lat
