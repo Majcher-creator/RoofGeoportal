@@ -121,11 +121,10 @@ def wspolrzedne_do_kafelka(x, y, zoom_level=14):
     Returns:
         tuple: (tile_col, tile_row, pixel_x, pixel_y)
     """
-    # Parametry macierzy kafelków dla EPSG:2180
-    # Origin (TopLeftCorner) dla EPSG:2180 - lewy górny róg Polski
-    # Zgodne z oficjalnymi granicami EPSG:2180 dla Polski
-    origin_x = 144693.28  # Min X (lewy brzeg)
-    origin_y = 908411.19  # Max Y (górny brzeg)
+    # Parametry macierzy kafelków dla EPSG:2180 z GetCapabilities Geoportalu
+    # Wartości zgodne z https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WMTS/StandardResolution
+    origin_x = -5713134.0
+    origin_y = 8693134.0
     tile_size = 256
     
     # Rozdzielczość dla różnych poziomów zoom (metry na piksel)
