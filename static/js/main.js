@@ -49,7 +49,8 @@ const elements = {
     katNachyleniaInput: null,
     obliczBtn: null,
     resultsSection: null,
-    loadingOverlay: null
+    loadingOverlay: null,
+    roofPlanInput: null
 };
 
 /**
@@ -63,6 +64,7 @@ function init() {
     elements.mapSourceSelect = document.getElementById('map-source-select');
     elements.googleApiKeyInput = document.getElementById('google-api-key-input');
     elements.zaladujMapeBtn = document.getElementById('zaladuj-mape-btn');
+    elements.roofPlanInput = document.getElementById('roof-plan-input');
     elements.resetujPunktyBtn = document.getElementById('resetuj-punkty-btn');
     elements.wybierzABtn = document.getElementById('wybierz-a-btn');
     elements.wybierzBBtn = document.getElementById('wybierz-b-btn');
@@ -81,6 +83,9 @@ function init() {
     elements.wybierzABtn.addEventListener('click', () => ustawTrybWyboru('punkt_a'));
     elements.wybierzBBtn.addEventListener('click', () => ustawTrybWyboru('punkt_b'));
     elements.obliczBtn.addEventListener('click', wykonajObliczenia);
+    if (elements.roofPlanInput) {
+        elements.roofPlanInput.addEventListener('change', zaladujZrzutDachu);
+    }
     
     // Dodaj przycisk DEMO
     const demoBtn = document.getElementById('demo-btn');
@@ -104,6 +109,42 @@ function init() {
     }
 
     console.log('RoofGeoportal zainicjalizowany');
+}
+
+/**
+ * Ładowanie zrzutu planu dachu jako fallback
+ */
+function zaladujZrzutDachu(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) {
+        return;
+    }
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    const allowedExtensions = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tiff', 'tif'];
+    if (!file.type.startsWith('image/') || !allowedExtensions.includes(extension)) {
+        pokazKomunikat('Wybierz plik graficzny', 'error');
+        event.target.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+            state.obrazMapy = img;
+            resetujPunkty();
+            rysujCanvas();
+            pokazKomunikat('Załadowano zrzut planu dachu', 'success');
+        };
+        img.onerror = () => {
+            pokazKomunikat('Nie udało się wczytać obrazu', 'error');
+        };
+        img.src = reader.result;
+    };
+    reader.onerror = () => {
+        pokazKomunikat('Błąd wczytywania pliku', 'error');
+    };
+    reader.readAsDataURL(file);
 }
 
 /**
@@ -143,6 +184,9 @@ async function zaladujMape() {
             const img = new Image();
             img.onload = () => {
                 state.obrazMapy = img;
+                if (elements.roofPlanInput) {
+                    elements.roofPlanInput.value = '';
+                }
                 rysujCanvas();
                 if (data.notice) {
                     pokazKomunikat(data.notice, data.notice_level || 'info');

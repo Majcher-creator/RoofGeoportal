@@ -68,6 +68,7 @@ section h2 {
 
 .search-section input[type="text"],
 .search-section input[type="password"],
+.search-section input[type="file"],
 .search-section select {
     flex: 1;
     padding: 12px;
@@ -78,6 +79,7 @@ section h2 {
 
 .search-section input[type="text"]:focus,
 .search-section input[type="password"]:focus,
+.search-section input[type="file"]:focus,
 .search-section select:focus {
     outline: none;
     border-color: #667eea;
@@ -229,6 +231,10 @@ section h2 {
     align-items: center;
     gap: 10px;
     flex: 1;
+}
+
+.upload-row {
+    margin-top: 10px;
 }
 
 .label-text {
