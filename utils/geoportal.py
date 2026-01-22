@@ -422,6 +422,8 @@ def pobierz_mape_dla_wspolrzednych(
         wspolrzedne_text: Tekst ze współrzędnymi (np. "52.2297,21.0122" lub adres)
         szerokosc: Szerokość obrazu
         wysokosc: Wysokość obrazu
+        map_source: Źródło mapy ("geoportal", "google_maps", "openstreetmap")
+        google_api_key: Klucz API Google Maps (opcjonalny)
         
     Returns:
         tuple: (PIL.Image, lon, lat, error_message) lub (None, None, None, error_message)

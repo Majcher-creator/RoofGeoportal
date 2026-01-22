@@ -7,6 +7,7 @@ from io import BytesIO
 import base64
 import json
 import os
+from PIL import Image
 
 from utils.geoportal import pobierz_mape_dla_wspolrzednych
 from utils.calculations import AnalizatorDachu, oblicz_skale
@@ -38,9 +39,6 @@ def get_map():
         JSON z obrazem mapy w base64
     """
     try:
-        from PIL import Image
-        import os
-        
         data = request.get_json()
         
         wspolrzedne = data.get('wspolrzedne', '')
