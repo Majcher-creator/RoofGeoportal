@@ -131,6 +131,7 @@ def geokoduj_adres(adres):
         if not dane:
             return None
         def sort_key(kandydat):
+            # Tie-breaker: prefer longer, more descriptive display names after score.
             display_name = str(kandydat.get("display_name", ""))
             return (score_candidate(kandydat), len(display_name), display_name)
 
